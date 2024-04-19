@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Read OTP from SMS</string>
+    <string name="countdownTimer">00:%1$s</string>
+</resources>
