@@ -1,11 +1,18 @@
 package com.arjungupta08.readotpfromsms
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.os.CountDownTimer
+import android.telephony.SmsMessage
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.view.inputmethod.InputMethodManager
@@ -13,6 +20,8 @@ import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.cardview.widget.CardView
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
 
@@ -41,6 +50,9 @@ class MainActivity : AppCompatActivity() {
         get() = findViewById(R.id.card_verify_otp)
 
 
+    private val SMS_PERMISSION_REQUEST_CODE = 123
+    private val SMS_RECEIVE_ACTION = "android.provider.Telephony.SMS_RECEIVED"
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -52,6 +64,13 @@ class MainActivity : AppCompatActivity() {
         otpET4.addTextChangedListener(textWatcher)
         otpET5.addTextChangedListener(textWatcher)
         otpET6.addTextChangedListener(textWatcher)
+
+        // Check and request SMS permission
+        if (!checkSmsPermission()) {
+            requestSmsPermission()
+        } else {
+            registerSmsReceiver()
+        }
 
         showKeyBoard(otpET1)
 
@@ -91,6 +110,57 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun checkSmsPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            this,
+            android.Manifest.permission.RECEIVE_SMS
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun requestSmsPermission() {
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(android.Manifest.permission.RECEIVE_SMS),
+            SMS_PERMISSION_REQUEST_CODE
+        )
+    }
+
+    private fun registerSmsReceiver() {
+        val intentFilter = IntentFilter(SMS_RECEIVE_ACTION)
+        registerReceiver(smsReceiver, intentFilter)
+    }
+
+    private val smsReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == SMS_RECEIVE_ACTION) {
+                val bundle = intent.extras
+                if (bundle != null) {
+                    val pdus = bundle.get("pdus") as Array<Any>?
+                    if (pdus != null) {
+                        for (pdu in pdus) {
+                            val smsMessage = getIncomingMessage(pdu as ByteArray, bundle)
+                            val sender = smsMessage.displayOriginatingAddress
+                            val messageBody = smsMessage.messageBody
+                            // Here you can extract the OTP from messageBody
+                            Toast.makeText(applicationContext, "Message: $messageBody", Toast.LENGTH_SHORT).show()
+                            Log.d("SMSReceiver", "Sender: $sender, Message: $messageBody")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun getIncomingMessage(aObject: Any, bundle: Bundle): SmsMessage {
+        val format = bundle.getString("format")
+        return SmsMessage.createFromPdu(aObject as ByteArray, format)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        unregisterReceiver(smsReceiver)
+    }
+
     private val textWatcher = object : TextWatcher {
         override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
 
@@ -128,7 +198,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-
     private fun showKeyBoard(otpET: EditText) {
         otpET.requestFocus()
         val inputMethodManager: InputMethodManager =
